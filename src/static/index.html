@@ -522,60 +522,40 @@
 
                     <!-- Point of Sale Section -->
                     <div id="pos" class="section">
-                        <h2 class="mb-4">
-                            <i class="fas fa-shopping-cart me-2"></i>Point of Sale
-                        </h2>
-                        
-                        <div class="pos-screen">
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h5 class="mb-0">Product Search</h5>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="search-box mb-3">
-                                                <i class="fas fa-search"></i>
-                                                <input type="text" class="form-control" id="posProductSearch" placeholder="Search by name, SKU, or barcode..." onkeyup="searchPOSProducts()">
-                                            </div>
-                                            <div id="posProductResults" class="row">
-                                                <!-- Product search results will appear here -->
-                                            </div>
-                                        </div>
-                                    </div>
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h2><i class="fas fa-cash-register me-2"></i>Point of Sale</h2>
+                            <button class="btn btn-success btn-lg" onclick="showSaleModal()">
+                                <i class="fas fa-plus-circle me-2"></i>Create New Sale
+                            </button>
+                        </div>
+
+                        <div id="posContent">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Recent Sales</h5>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h5 class="mb-0">Shopping Cart</h5>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="cartItems">
-                                                <p class="text-muted text-center">Cart is empty</p>
-                                            </div>
-                                            <div class="total-section">
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span>Subtotal:</span>
-                                                    <span id="cartSubtotal">$0.00</span>
-                                                </div>
-                                                <div class="d-flex justify-content-between mb-2">
-                                                    <span>Tax:</span>
-                                                    <span id="cartTax">$0.00</span>
-                                                </div>
-                                                <div class="d-flex justify-content-between mb-3">
-                                                    <strong>Total:</strong>
-                                                    <strong id="cartTotal">$0.00</strong>
-                                                </div>
-                                                <button class="btn btn-success w-100" onclick="processSale()" id="checkoutBtn" disabled>
-                                                    <i class="fas fa-credit-card me-2"></i>Checkout
-                                                </button>
-                                            </div>
-                                        </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Invoice #</th>
+                                                    <th>Date</th>
+                                                    <th>Customer</th>
+                                                    <th>Items</th>
+                                                    <th>Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="posRecentSalesTable">
+                                                <!-- Recent sales will be loaded here by the new JavaScript functions -->
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
 
                     <!-- Other sections will be added here -->
                     <div id="inventory" class="section">
@@ -647,7 +627,7 @@
                                     <div class="col-md-6">
                                         <div class="search-box">
                                             <i class="fas fa-search"></i>
-                                            <input type="text" class="form-control" id="supplierSearch" placeholder="Search suppliers..." onkeyup="searchSuppliers()">
+                                            <input type="text" class="form-control" id="supplierSearchInput" placeholder="Search suppliers..." onkeyup="searchSuppliers()">
                                         </div>
                                     </div>
                                     <div class="col-md-2">

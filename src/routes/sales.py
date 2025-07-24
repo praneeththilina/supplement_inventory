@@ -4,6 +4,7 @@ from src.models.user import db
 from src.models.sale import Sale, SaleItem
 from src.models.inventory import Inventory
 from src.models.product import Product
+from src.models.transaction import Transaction
 from src.models.store import Store
 from datetime import datetime, date
 from decimal import Decimal
@@ -156,28 +157,40 @@ def create_sale():
         # Calculate sale totals
         sale.calculate_totals()
         
-        # Update inventory quantities
+        # Update inventory quantities and create transactions
         for item in sale.sale_items:
+            inventory_to_reduce_from = []
             if item.inventory_id:
-                # Reduce from specific inventory batch
-                inventory = Inventory.query.get(item.inventory_id)
-                inventory.quantity -= item.quantity
+                inventory_to_reduce_from.append(Inventory.query.get(item.inventory_id))
             else:
-                # Reduce from available inventory (FIFO)
-                available_inventory = Inventory.query.filter_by(
+                inventory_to_reduce_from = Inventory.query.filter_by(
                     product_id=item.product_id,
                     store_id=sale.store_id,
                     is_active=True
                 ).filter(Inventory.quantity > 0).order_by(Inventory.date_received).all()
+            
+            remaining_qty_to_sell = item.quantity
+            for inv in inventory_to_reduce_from:
+                if remaining_qty_to_sell <= 0:
+                    break
                 
-                remaining_qty = item.quantity
-                for inv in available_inventory:
-                    if remaining_qty <= 0:
-                        break
-                    
-                    reduce_qty = min(inv.quantity, remaining_qty)
-                    inv.quantity -= reduce_qty
-                    remaining_qty -= reduce_qty
+                qty_from_this_batch = min(inv.quantity, remaining_qty_to_sell)
+                inv.quantity -= qty_from_this_batch
+                remaining_qty_to_sell -= qty_from_this_batch
+
+                # FIX: Create a transaction for each sale item
+                transaction = Transaction(
+                    product_id=item.product_id,
+                    inventory_id=inv.id,
+                    store_id=sale.store_id,
+                    quantity=-qty_from_this_batch, # Negative for sale
+                    transaction_type='sale',
+                    unit_price=item.unit_price,
+                    total=item.unit_price * qty_from_this_batch,
+                    reference=f"Sale: {sale.invoice_number}",
+                    user_id=current_user.id
+                )
+                db.session.add(transaction)
         
         db.session.commit()
         return jsonify(sale.to_dict()), 201
@@ -185,6 +198,7 @@ def create_sale():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
 
 @sales_bp.route('/sales/<int:sale_id>', methods=['GET'])
 @login_required

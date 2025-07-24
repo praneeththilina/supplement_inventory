@@ -25,14 +25,21 @@ def get_inventory():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
     product_id = request.args.get('product_id', type=int)
+    store_id = request.args.get('store_id', type=int) # Added store_id filter
     expired = request.args.get('expired', type=bool)
     expiring_soon = request.args.get('expiring_soon', type=bool)  # within 30 days
     
     query = Inventory.query
+
+    # FIX: Always filter out items with zero quantity
+    query = query.filter(Inventory.quantity > 0)
     
     # Apply filters
     if product_id:
         query = query.filter(Inventory.product_id == product_id)
+
+    if store_id:
+        query = query.filter(Inventory.store_id == store_id)
     
     if expired:
         query = query.filter(Inventory.expiration_date < date.today())
@@ -40,16 +47,15 @@ def get_inventory():
     if expiring_soon:
         from datetime import timedelta
         thirty_days_from_now = date.today() + timedelta(days=30)
-        query = query.filter(Inventory.expiration_date <= thirty_days_from_now)
+        query = query.filter(
+            Inventory.expiration_date <= thirty_days_from_now,
+            Inventory.expiration_date >= date.today()
+        )
     
-    inventory_items = query.paginate(page=page, per_page=per_page, error_out=False)
+    inventory_items = query.order_by(Inventory.product_id, Inventory.expiration_date).all()
     
-    return jsonify({
-        'inventory': [item.to_dict() for item in inventory_items.items],
-        'total': inventory_items.total,
-        'pages': inventory_items.pages,
-        'current_page': page
-    }), 200
+    return jsonify([item.to_dict() for item in inventory_items]), 200
+
 
 @inventory_bp.route('/inventory/<int:inventory_id>', methods=['GET'])
 @login_required

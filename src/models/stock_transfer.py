@@ -57,6 +57,7 @@ class StockTransferItem(db.Model):
     # Relationships
     product = db.relationship('Product', backref='transfer_items')
     inventory = db.relationship('Inventory', backref='transfer_items')
+    product_flavor = db.relationship('ProductFlavor', back_populates='transfer_items')
     
     def to_dict(self):
         return {

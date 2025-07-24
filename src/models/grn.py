@@ -71,6 +71,7 @@ class GRNItem(db.Model):
     
     # Relationships
     product = db.relationship('Product', backref='grn_items')
+    product_flavor = db.relationship('ProductFlavor', back_populates='grn_items')
     
     def to_dict(self):
         return {

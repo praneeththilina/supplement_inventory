@@ -32,6 +32,7 @@ class Inventory(db.Model):
             'product_id': self.product_id,
             'product_name': self.product.name if self.product else None,
             'product_sku': self.product.sku if self.product else None,
+            'reorder_point': self.product.reorder_point if self.product else 10, # FIX: Include reorder_point
             'product_flavor_id': self.product_flavor_id,
             'flavor_name': self.product_flavor.flavor.name if self.product_flavor and self.product_flavor.flavor else None,
             'store_id': self.store_id,
@@ -83,4 +84,3 @@ class Inventory(db.Model):
     
     def __repr__(self):
         return f'<Inventory {self.product.name if self.product else "Unknown"} - Batch: {self.batch_number}>'
-

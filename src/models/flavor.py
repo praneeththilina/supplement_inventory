@@ -38,6 +38,8 @@ class ProductFlavor(db.Model):
     # Relationships
     inventory_items = db.relationship('Inventory', backref='product_flavor', lazy=True)
     sale_items = db.relationship('SaleItem', backref='product_flavor', lazy=True)
+    grn_items = db.relationship('GRNItem', back_populates='product_flavor', lazy=True)
+    transfer_items = db.relationship('StockTransferItem', back_populates='product_flavor', lazy=True)
     
     def to_dict(self):
         return {

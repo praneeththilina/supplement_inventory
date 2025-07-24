@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_login import login_required, current_user
 from src.models.user import db
 from src.models.stock_transfer import StockTransfer, StockTransferItem
+from src.models.transaction import Transaction
 from src.models.inventory import Inventory
 from src.models.product import Product
 from src.models.store import Store
@@ -152,67 +153,67 @@ def approve_stock_transfer(transfer_id):
         
         # Process each transfer item
         for item in transfer.transfer_items:
-            if item.inventory_id:
-                # Transfer from specific inventory batch
-                source_inventory = Inventory.query.get(item.inventory_id)
-                if source_inventory.quantity < item.quantity:
-                    return jsonify({'error': f'Insufficient quantity in batch {source_inventory.batch_number}'}), 400
+            # Reduce from any available inventory (FIFO)
+            available_inventory = Inventory.query.filter_by(
+                product_id=item.product_id,
+                store_id=transfer.from_store_id,
+                is_active=True
+            ).filter(Inventory.quantity > 0).order_by(Inventory.date_received).all()
+            
+            remaining_qty_to_transfer = item.quantity
+            for inv in available_inventory:
+                if remaining_qty_to_transfer <= 0:
+                    break
                 
-                # Reduce quantity from source
-                source_inventory.quantity -= item.quantity
+                transfer_qty = min(inv.quantity, remaining_qty_to_transfer)
                 
-                # Create new inventory in destination store
+                # Reduce from source
+                inv.quantity -= transfer_qty
+                remaining_qty_to_transfer -= transfer_qty
+                
+                # FIX: Added the 'store_id' argument for the outgoing transaction
+                out_transaction = Transaction(
+                    product_id=item.product_id,
+                    inventory_id=inv.id,
+                    store_id=transfer.from_store_id,
+                    quantity=-transfer_qty,
+                    transaction_type='transfer-out',
+                    reference=f"To {transfer.to_store.name}: {transfer.transfer_number}",
+                    user_id=current_user.id
+                )
+                db.session.add(out_transaction)
+
+                # Create or update in destination
                 dest_inventory = Inventory(
                     product_id=item.product_id,
                     product_flavor_id=item.product_flavor_id,
                     store_id=transfer.to_store_id,
-                    supplier_id=source_inventory.supplier_id,
-                    batch_number=source_inventory.batch_number,
-                    expiration_date=source_inventory.expiration_date,
-                    quantity=item.quantity,
-                    unit_cost=item.unit_cost or source_inventory.unit_cost,
-                    location=source_inventory.location,
-                    date_received=source_inventory.date_received,
+                    supplier_id=inv.supplier_id,
+                    batch_number=inv.batch_number,
+                    expiration_date=inv.expiration_date,
+                    quantity=transfer_qty,
+                    unit_cost=item.unit_cost or inv.unit_cost,
+                    location=inv.location,
+                    date_received=inv.date_received,
                     notes=f"Transferred from {transfer.from_store.name}"
                 )
                 db.session.add(dest_inventory)
-            else:
-                # Transfer from any available inventory (FIFO)
-                available_inventory = Inventory.query.filter_by(
+                db.session.flush()
+
+                # FIX: Added the 'store_id' argument for the incoming transaction
+                in_transaction = Transaction(
                     product_id=item.product_id,
-                    store_id=transfer.from_store_id,
-                    is_active=True
-                ).filter(Inventory.quantity > 0).order_by(Inventory.date_received).all()
-                
-                remaining_qty = item.quantity
-                for inv in available_inventory:
-                    if remaining_qty <= 0:
-                        break
-                    
-                    transfer_qty = min(inv.quantity, remaining_qty)
-                    
-                    # Reduce from source
-                    inv.quantity -= transfer_qty
-                    remaining_qty -= transfer_qty
-                    
-                    # Create in destination
-                    dest_inventory = Inventory(
-                        product_id=item.product_id,
-                        product_flavor_id=item.product_flavor_id,
-                        store_id=transfer.to_store_id,
-                        supplier_id=inv.supplier_id,
-                        batch_number=inv.batch_number,
-                        expiration_date=inv.expiration_date,
-                        quantity=transfer_qty,
-                        unit_cost=item.unit_cost or inv.unit_cost,
-                        location=inv.location,
-                        date_received=inv.date_received,
-                        notes=f"Transferred from {transfer.from_store.name}"
-                    )
-                    db.session.add(dest_inventory)
-                
-                if remaining_qty > 0:
-                    return jsonify({'error': f'Insufficient inventory for {item.product.name}'}), 400
+                    inventory_id=dest_inventory.id,
+                    store_id=transfer.to_store_id,
+                    quantity=transfer_qty,
+                    transaction_type='transfer-in',
+                    reference=f"From {transfer.from_store.name}: {transfer.transfer_number}",
+                    user_id=current_user.id
+                )
+                db.session.add(in_transaction)
+
+            if remaining_qty_to_transfer > 0:
+                return jsonify({'error': f'Insufficient inventory for {item.product.name}'}), 400
         
         # Update transfer status
         transfer.status = 'completed'
@@ -225,6 +226,7 @@ def approve_stock_transfer(transfer_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
 
 @stock_transfers_bp.route('/stock-transfers/<int:transfer_id>/cancel', methods=['POST'])
 @login_required

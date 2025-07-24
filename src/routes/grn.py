@@ -5,6 +5,7 @@ from src.models.grn import GRN, GRNItem
 from src.models.inventory import Inventory
 from src.models.product import Product
 from src.models.supplier import Supplier
+from src.models.transaction import Transaction
 from src.models.store import Store
 from datetime import datetime, date
 from decimal import Decimal
@@ -157,35 +158,36 @@ def verify_grn(grn_id):
         
         # Add each GRN item to inventory
         for item in grn.grn_items:
-            # Check if inventory already exists for this batch
-            existing_inventory = Inventory.query.filter_by(
+            inventory = Inventory(
                 product_id=item.product_id,
+                product_flavor_id=item.product_flavor_id,
                 store_id=grn.store_id,
+                supplier_id=grn.supplier_id,
                 batch_number=item.batch_number,
-                grn_id=grn.id
-            ).first()
-            
-            if existing_inventory:
-                # Update existing inventory
-                existing_inventory.quantity += item.quantity_received
-                existing_inventory.unit_cost = item.unit_cost  # Update with latest cost
-            else:
-                # Create new inventory entry
-                inventory = Inventory(
-                    product_id=item.product_id,
-                    product_flavor_id=item.product_flavor_id,
-                    store_id=grn.store_id,
-                    supplier_id=grn.supplier_id,
-                    batch_number=item.batch_number,
-                    expiration_date=item.expiration_date,
-                    quantity=item.quantity_received,
-                    unit_cost=item.unit_cost,
-                    location=item.location,
-                    date_received=grn.received_date,
-                    grn_id=grn.id,
-                    notes=f"Received via GRN {grn.grn_number}"
-                )
-                db.session.add(inventory)
+                expiration_date=item.expiration_date,
+                quantity=item.quantity_received,
+                unit_cost=item.unit_cost,
+                location=item.location,
+                date_received=grn.received_date,
+                grn_id=grn.id,
+                notes=f"Received via GRN {grn.grn_number}"
+            )
+            db.session.add(inventory)
+            db.session.flush() # To get the new inventory ID
+
+            # FIX: Added the 'store_id' argument when creating the transaction
+            transaction = Transaction(
+                product_id=item.product_id,
+                inventory_id=inventory.id,
+                store_id=grn.store_id,
+                quantity=item.quantity_received, # Positive for restock
+                transaction_type='restock',
+                unit_price=item.unit_cost,
+                total=item.line_total,
+                reference=f"GRN: {grn.grn_number}",
+                user_id=current_user.id
+            )
+            db.session.add(transaction)
         
         # Update GRN status
         grn.status = 'verified'
@@ -198,6 +200,7 @@ def verify_grn(grn_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
 
 @grn_bp.route('/grns/<int:grn_id>/complete', methods=['POST'])
 @login_required
