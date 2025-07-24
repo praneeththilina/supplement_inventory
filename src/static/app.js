@@ -134,10 +134,14 @@ function printReceipt(invoiceNumber) {
     window.print();
 }
 
+
+
 // Placeholder functions for other features
 function showProductModal() {
     // Product management modal will be implemented here
 }
+
+
 
 function showStoreModal() {
     const modal = new bootstrap.Modal(document.getElementById('storeModal'));
